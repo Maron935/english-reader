@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>英語リスニング</title>
+<style>
+/* ===== 配色（ライト／ダークはiPhoneの設定に自動で合わせる） ===== */
+:root{--bg:#f2f2f7;--card:#fff;--tx:#1c1c1e;--sub:#8e8e93;--line:rgba(60,60,67,.18);--blue:#007aff;--fill:rgba(118,118,128,.12);--seg:#fff;--hl:rgba(255,204,0,.5);--red:#ff3b30}
+@media(prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1c1e;--tx:#fff;--sub:#98989f;--line:rgba(84,84,88,.6);--blue:#0a84ff;--fill:rgba(118,118,128,.24);--seg:#636366;--hl:rgba(255,214,10,.35);--red:#ff453a}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;-webkit-text-size-adjust:100%;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:640px;margin:0 auto;padding:8px 16px 56px}
+h1{font-size:34px;letter-spacing:-.02em;margin:20px 4px 14px}
+h2{font-size:13px;font-weight:400;color:var(--sub);margin:26px 16px 6px}
+.card{background:var(--card);border-radius:14px;overflow:hidden}
+button,select,input{font-family:inherit}
+
+/* ===== 英文エリア（入力欄と、再生中に出る表示欄は同じ見た目） ===== */
+#text,#viewer{display:block;width:100%;height:42vh;min-height:220px;padding:16px;font:19px/1.75 ui-serif,"New York",Georgia,serif;color:var(--tx);background:transparent;border:0;outline:0;resize:none;white-space:pre-wrap;word-break:break-word;overflow-y:auto}
+#viewer{display:none}
+.playing #text{display:none}
+.playing #viewer{display:block}
+.s{border-radius:6px;cursor:pointer;transition:background .2s;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.s.on{background:var(--hl)}
+.dim{opacity:.35}
+.bar{display:flex;align-items:center;gap:4px;padding:4px 8px 4px 16px;border-top:.5px solid var(--line);color:var(--sub);font-size:13px}
+.bar span{flex:1}
+.link{background:none;border:0;color:var(--blue);font-size:16px;padding:10px 8px;min-height:44px}
+#info{margin:10px 16px 0;font-size:13px;color:var(--sub)}
+
+/* ===== 操作ボタン（大きめ） ===== */
+.ctl{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:14px}
+.btn{height:58px;border:0;border-radius:14px;font-size:18px;font-weight:600;background:var(--card);color:var(--blue)}
+.btn.main{background:var(--blue);color:#fff}
+.btn.stop{color:var(--red)}
+.btn:active{opacity:.55}
+
+/* ===== セグメントコントロール（iOS風の切り替え） ===== */
+.seg{display:grid;gap:2px;background:var(--fill);padding:2px;border-radius:10px;margin:10px}
+.seg button{height:42px;border:0;border-radius:8px;background:transparent;color:var(--tx);font-size:14px;font-weight:500;padding:0 2px}
+.seg button[aria-pressed=true]{background:var(--seg);box-shadow:0 1px 3px rgba(0,0,0,.25);font-weight:700}
+#modeSeg{grid-template-columns:1fr 1fr}
+#rateSeg{grid-template-columns:repeat(6,1fr)}
+
+/* ===== 設定の行・スイッチ ===== */
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;min-height:52px;border-top:.5px solid var(--line)}
+.row:first-child{border-top:0}
+.sw{position:relative;width:51px;height:31px;flex:none}
+.sw input{-webkit-appearance:none;appearance:none;width:51px;height:31px;margin:0;border-radius:16px;background:var(--fill);transition:background .2s}
+.sw input:checked{background:#34c759}
+.sw i{position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.3);transition:transform .2s;pointer-events:none}
+.sw input:checked+i{transform:translateX(20px)}
+select{max-width:60%;font-size:16px;color:var(--blue);background:transparent;border:0}
+
+/* ===== お気に入り ===== */
+.field{flex:1;min-width:0;font-size:17px;color:var(--tx);background:var(--fill);border:0;border-radius:10px;height:44px;padding:0 12px;outline:0}
+.fav{display:flex;align-items:center;border-top:.5px solid var(--line)}
+.fav .name{flex:1;min-width:0;text-align:left;background:none;border:0;color:var(--tx);padding:12px 16px;font-size:17px}
+.fav .name small{display:block;color:var(--sub);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{padding:20px 16px;color:var(--sub);font-size:15px;text-align:center}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:rgba(60,60,67,.92);color:#fff;padding:10px 18px;border-radius:20px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%)}
+</style>
+</head>
+<body>
+<main id="app">
+  <h1>英語リスニング</h1>
+
+  <!-- 英文の入力・表示 -->
+  <div class="card" id="box">
+    <textarea id="text" placeholder="ここに英文を貼り付けてください。&#10;読みたい部分を長押し（PCはドラッグ）で選ぶと、そこから再生できます。" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+    <div id="viewer"></div>
+    <div class="bar">
+      <span id="count"></span>
+      <button class="link" id="pasteBtn">ペースト</button>
+      <button class="link" id="clearBtn">消去</button>
+    </div>
+  </div>
+  <div id="info"></div>
+
+  <!-- 再生ボタン -->
+  <div class="ctl">
+    <button class="btn main" id="playBtn">▶︎ 再生</button>
+    <button class="btn stop" id="stopBtn">停止</button>
+  </div>
+
+  <h2>再生範囲</h2>
+  <div class="card">
+    <div class="seg" id="modeSeg">
+      <button data-mode="tail">選択箇所から文末まで</button>
+      <button data-mode="only">選択範囲のみ</button>
+    </div>
+    <div class="row">
+      <span>リピート再生</span>
+      <label class="sw"><input type="checkbox" id="repeat"><i></i></label>
+    </div>
+  </div>
+
+  <h2>速度</h2>
+  <div class="card"><div class="seg" id="rateSeg"></div></div>
+
+  <h2>音声</h2>
+  <div class="card">
+    <div class="row"><span>アメリカ英語</span><select id="voice"></select></div>
+  </div>
+
+  <h2>お気に入り</h2>
+  <div class="card">
+    <div class="row">
+      <input class="field" id="favName" placeholder="名前（例：ニュース記事）" maxlength="40">
+      <button class="link" id="favSave">保存</button>
+    </div>
+    <div id="favList"></div>
+  </div>
+</main>
+<div id="toast"></div>
+
+<script>
+/* ============ 基本の道具 ============ */
+const $ = id => document.getElementById(id);
+const ta = $('text'), viewer = $('viewer'), box = $('box');
+
+// LocalStorageの読み書き（失敗してもアプリが止まらないようにする）
+const load = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+
+// 画面下に一瞬だけ出るメッセージ
+let toastTimer;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ============ 状態 ============ */
+const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const RATE_LABELS = ['0.5×', '0.75×', '1.0×', '1.25×', '1.5×', '2.0×'];
+let set = Object.assign({ rate: 1, mode: 'tail', repeat: false, voice: '' }, load('ela_set', {})); // 設定
+let favs = load('ela_favs', []);       // お気に入り一覧
+let lastSel = { s: 0, e: 0 };          // 最後に選択された範囲
+let state = 'stopped';                 // stopped / playing / paused
+let queue = [], idx = 0;               // 読み上げる文のリストと現在位置
+let range = { from: 0, to: 0 };        // 再生中の範囲
+let runId = 0;                         // 再生のたびに増やし、古い再生の終了通知を無視する番号
+let rateDirty = false;                 // 一時停止中に速度を変えたかどうか
+let voices = [];
+
+/* ============ 英文の分割 ============ */
+// from〜to の範囲を「. ! ? 」や改行で文に区切る。start/end は全文での位置
+function splitSentences(full, from, to) {
+  const out = [], seg = full.slice(from, to);
+  const re = /[^\n]*?(?:[.!?]+["'”’)\]]*(?=\s|$)|\n|$)/g;
+  let m;
+  while ((m = re.exec(seg)) !== null) {
+    if (m[0].length === 0) { re.lastIndex++; if (re.lastIndex > seg.length) break; continue; }
+    if (m[0].trim()) out.push({ start: from + m.index, end: from + m.index + m[0].length, text: m[0].trim() });
+  }
+  return out;
+}
+
+/* ============ 選択範囲の取得 ============ */
+// 選択を記録する（ボタンを押すと入力欄のフォーカスが外れるため、入力欄が操作中のときだけ更新）
+function trackSel() {
+  if (document.activeElement !== ta) return;
+  lastSel = { s: ta.selectionStart, e: ta.selectionEnd };
+  updateInfo();
+}
+['select', 'keyup', 'mouseup', 'touchend'].forEach(ev => ta.addEventListener(ev, trackSel));
+document.addEventListener('selectionchange', trackSel);
+
+// 再生モードと選択状況から、今回読む範囲を決める
+function getRange() {
+  const len = ta.value.length;
+  const s = Math.min(lastSel.s, len), e = Math.min(lastSel.e, len);
+  if (s === e) return { from: 0, to: len, label: '全文' };                         // 選択なし → 全文
+  if (set.mode === 'only') return { from: s, to: e, label: '選択範囲のみ' };         // 選択範囲だけ
+  return { from: s, to: len, label: '選択箇所から文末まで' };                         // 選択箇所から最後まで
+}
+
+/* ============ 画面表示の更新 ============ */
+function updateCount() {
+  const t = ta.value, words = t.trim() ? t.trim().split(/\s+/).length : 0;
+  $('count').textContent = `全文 ${t.length.toLocaleString()} 文字 ・ ${words.toLocaleString()} 語`;
+}
+function updateInfo() {
+  if (state !== 'stopped') return;
+  const r = getRange();
+  $('info').textContent = `再生範囲：${r.label}（${r.to - r.from}文字）`;
+}
+function updateButtons() {
+  $('playBtn').textContent = state === 'playing' ? '⏸ 一時停止' : state === 'paused' ? '▶︎ 再開' : '▶︎ 再生';
+  box.classList.toggle('playing', state !== 'stopped');
+  document.querySelectorAll('#modeSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === set.mode));
+  document.querySelectorAll('#rateSeg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.rate === set.rate));
+  $('repeat').checked = set.repeat;
+}
+
+// 再生中は、文ごとに分けた表示欄に切り替える（読んでいる文を黄色くハイライト）
+function renderViewer() {
+  const full = ta.value;
+  viewer.innerHTML = '';
+  const add = (txt, cls) => { const sp = document.createElement('span'); sp.className = cls; sp.textContent = txt; viewer.appendChild(sp); return sp; };
+  let pos = range.from;
+  if (range.from > 0) add(full.slice(0, range.from), 'dim');
+  queue.forEach((q, i) => {
+    if (q.start > pos) add(full.slice(pos, q.start), '');   // 文と文の間の空白・改行
+    const sp = add(full.slice(q.start, q.end), 's'); sp.dataset.i = i;
+    pos = q.end;
+  });
+  if (pos < full.length) add(full.slice(pos), 'dim');
+}
+function highlight() {
+  viewer.querySelectorAll('.s.on').forEach(e => e.classList.remove('on'));
+  const el = viewer.querySelector(`.s[data-i="${idx}"]`);
+  if (el) { el.classList.add('on'); el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+}
+
+/* ============ 読み上げ ============ */
+function currentVoice() { return voices.find(v => v.name === set.voice) || null; }
+
+// 今の文を1つ読み上げ、終わったら次の文へ
+function speakCurrent() {
+  if (state !== 'playing') return;
+  const my = runId, q = queue[idx];
+  const u = new SpeechSynthesisUtterance(q.text);
+  u.lang = 'en-US'; u.rate = set.rate;
+  const v = currentVoice(); if (v) u.voice = v;
+  const next = () => {
+    if (my !== runId) return;                 // 古い再生の通知は無視
+    idx++;
+    if (idx < queue.length) speakCurrent(); else finish();
+  };
+  u.onend = next;
+  u.onerror = e => { if (e.error === 'interrupted' || e.error === 'canceled') return; next(); };
+  highlight();
+  speechSynthesis.speak(u);
+}
+
+// 読み上げを一度止めて、少し待ってから今の文をやり直す（速度変更・ジャンプ用）
+function restart() {
+  runId++;
+  speechSynthesis.cancel(); speechSynthesis.resume();
+  const my = runId;
+  setTimeout(() => { if (my === runId) speakCurrent(); }, 80);
+}
+
+function startRange(from, to) {
+  range = { from, to };
+  queue = splitSentences(ta.value, from, to);
+  if (!queue.length) { toast('読み上げる英文がありません'); return; }
+  idx = 0; state = 'playing'; rateDirty = false;
+  renderViewer(); updateButtons(); restart();
+}
+
+function finish() {                           // 範囲の最後まで読み終えたとき
+  if (set.repeat) startRange(range.from, range.to); else stop();
+}
+function pause() { speechSynthesis.pause(); state = 'paused'; updateButtons(); }
+function resume() {
+  state = 'playing'; updateButtons();
+  if (rateDirty) { rateDirty = false; restart(); } else speechSynthesis.resume();
+}
+function stop() {
+  runId++; speechSynthesis.cancel();
+  state = 'stopped'; updateButtons(); updateInfo();
+}
+
+/* ============ ボタンの動き ============ */
+$('playBtn').onclick = () => {
+  if (!('speechSynthesis' in window)) { toast('このブラウザは読み上げに対応していません'); return; }
+  if (state === 'playing') pause();
+  else if (state === 'paused') resume();
+  else { const r = getRange(); startRange(r.from, r.to); }
+};
+$('stopBtn').onclick = stop;
+
+// 再生中に英文をタップすると、その文から再生しなおす
+viewer.addEventListener('click', e => {
+  const el = e.target.closest('.s'); if (!el) return;
+  idx = +el.dataset.i; state = 'playing'; updateButtons(); restart();
+});
+
+document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => { set.mode = b.dataset.mode; save('ela_set', set); updateButtons(); updateInfo(); });
+$('repeat').onchange = e => { set.repeat = e.target.checked; save('ela_set', set); };
+$('voice').onchange = e => { set.voice = e.target.value; save('ela_set', set); if (state === 'playing') restart(); };
+
+// 速度ボタンを作る
+RATES.forEach((r, i) => {
+  const b = document.createElement('button');
+  b.textContent = RATE_LABELS[i]; b.dataset.rate = r;
+  b.onclick = () => {
+    set.rate = r; save('ela_set', set); updateButtons();
+    if (state === 'playing') restart(); else if (state === 'paused') rateDirty = true;   // 次の文ではなく今の文から新しい速度で
+  };
+  $('rateSeg').appendChild(b);
+});
+
+// アメリカ英語の音声を一覧にする（iPhoneは読み込みが遅れることがある）
+function loadVoices() {
+  voices = speechSynthesis.getVoices().filter(v => v.lang.replace('_', '-').toLowerCase() === 'en-us');
+  const sel = $('voice'); sel.innerHTML = '';
+  if (!voices.length) { sel.innerHTML = '<option>標準の音声</option>'; return; }
+  if (!voices.some(v => v.name === set.voice)) {
+    const p = voices.find(v => /Samantha|Google US English|Alex/.test(v.name)) || voices[0];
+    set.voice = p.name;
+  }
+  voices.forEach(v => { const o = document.createElement('option'); o.value = v.name; o.textContent = v.name; sel.appendChild(o); });
+  sel.value = set.voice;
+}
+if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+else toast('このブラウザは読み上げに対応していません');
+window.addEventListener('pagehide', () => { if ('speechSynthesis' in window) speechSynthesis.cancel(); });
+
+/* ============ 入力・自動保存 ============ */
+ta.addEventListener('input', () => { save('ela_text', ta.value); updateCount(); trackSel(); });
+
+$('pasteBtn').onclick = async () => {              // クリップボードの英文を挿入
+  try {
+    const t = await navigator.clipboard.readText();
+    ta.setRangeText(t, ta.selectionStart, ta.selectionEnd, 'end');
+    ta.dispatchEvent(new Event('input'));
+  } catch (e) { toast('入力欄を長押しして「ペースト」を選んでください'); }
+};
+$('clearBtn').onclick = () => {
+  if (!ta.value || !confirm('入力した英文を消去しますか？')) return;
+  stop(); ta.value = ''; lastSel = { s: 0, e: 0 };
+  ta.dispatchEvent(new Event('input'));
+};
+
+/* ============ お気に入り ============ */
+function renderFavs() {
+  const list = $('favList'); list.innerHTML = '';
+  if (!favs.length) { list.innerHTML = '<div class="empty">保存した英文がここに並びます</div>'; return; }
+  favs.forEach(f => {
+    const row = document.createElement('div'); row.className = 'fav';
+    const nameBtn = document.createElement('button'); nameBtn.className = 'name';
+    nameBtn.textContent = f.name;
+    const sm = document.createElement('small'); sm.textContent = f.text.replace(/\s+/g, ' ').slice(0, 60);
+    nameBtn.appendChild(sm);
+    nameBtn.onclick = () => {                        // 入力欄に読み込む
+      stop(); ta.value = f.text; lastSel = { s: 0, e: 0 };
+      save('ela_text', ta.value); updateCount(); updateInfo();
+      window.scrollTo({ top: 0, behavior: 'smooth' }); toast(`「${f.name}」を読み込みました`);
+    };
+    const del = document.createElement('button'); del.className = 'link'; del.textContent = '削除';
+    del.style.color = 'var(--red)';
+    del.onclick = () => {
+      if (!confirm(`「${f.name}」を削除しますか？`)) return;
+      favs = favs.filter(x => x.id !== f.id); save('ela_favs', favs); renderFavs();
+    };
+    row.append(nameBtn, del); list.appendChild(row);
+  });
+}
+$('favSave').onclick = () => {
+  const text = ta.value.trim();
+  if (!text) { toast('保存する英文を入力してください'); return; }
+  const name = $('favName').value.trim() || text.replace(/\s+/g, ' ').slice(0, 20);
+  const old = favs.find(f => f.name === name);       // 同じ名前は上書き
+  if (old) old.text = ta.value; else favs.unshift({ id: Date.now(), name, text: ta.value });
+  save('ela_favs', favs); renderFavs();
+  $('favName').value = ''; toast(old ? '上書き保存しました' : '保存しました');
+};
+
+/* ============ 起動時の処理 ============ */
+ta.value = load('ela_text', '');                    // 前回の入力を復元
+updateCount(); updateButtons(); updateInfo(); renderFavs();
+</script>
+</body>
+</html>
